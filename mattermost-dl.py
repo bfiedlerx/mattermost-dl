@@ -58,13 +58,18 @@ def select_channel(d, team, my_user_id, user_id_to_name):
     print("Found Channels:")
     for i_channel, channel in enumerate(channels):
         print("{}\t{}\t{}".format(i_channel, channel["display_name"], channel["id"]))
-    channel_idx = int(input("Select channels by idx separated by comma: "))
-    channel = channels[channel_idx]
-    print("Selected channel", channel["display_name"])
-    return channel
+    channel_input = input("Select channels by idx separated by comma: ")
+    channel_idxs = channel_input.replace(" ", "").split(",")
+    selected_channels = [channels[int(idx)] for idx in channel_idxs]
+    print("Selected channel(s):", ", ".join([channel["display_name"] for channel in selected_channels]))
+    return selected_channels
 
 
 def export_channel(d, channel, user_id_to_name, output_base, before=None, after=None):
+    # Sanitize channel name
+    channel_name = channel["display_name"].replace("\\", "").replace("/", "")
+
+    print("Exporting channel", channel_name)
     if after:
         after = datetime.strptime(after, '%Y-%m-%d').timestamp()
     if before:
@@ -85,8 +90,7 @@ def export_channel(d, channel, user_id_to_name, output_base, before=None, after=
         page += 1
     print("Found {} posts".format(len(all_posts)))
     # Create output directory
-    output_base = pathlib.Path(output_base)
-    output_base = output_base / channel["display_name"]
+    output_base = pathlib.Path(output_base) / channel_name
     if not output_base.exists():
         output_base.mkdir()
     # Simplify all posts to contain only username, date, message and files in chronological order
@@ -138,9 +142,9 @@ def export_channel(d, channel, user_id_to_name, output_base, before=None, after=
                 filenames.append(file["name"])
             simple_post["files"] = filenames
         simple_posts.append(simple_post)
+
     # Export posts to json file
-    output_filename = channel["display_name"] + ".json"
-    output_filename = output_filename.replace("\\", "").replace("/", "")
+    output_filename = channel_name + ".json"
     with open(output_base / output_filename, "w", encoding='utf8') as f:
         json.dump(simple_posts, f, indent=2, ensure_ascii=False)
     print("Dumped channel texts to", output_filename)
@@ -149,15 +153,17 @@ def export_channel(d, channel, user_id_to_name, output_base, before=None, after=
 if __name__ == '__main__':
     host = ""
     username = ""  # Your gitlab username
-    login_token = ""  # Your Access Token. Can be extracted from Browser Inspector
+    login_token = ""  # Access Token. Can be extracted from Browser Inspector (MMAUTHTOKEN)
     output_base = "results/"
     download_files = True
 
-    # Specify range of posts to export as string in format "YYYY-MM-DD". Use None is no filter should be applied
+    # Range of posts to be exported as string in format "YYYY-MM-DD". Use None if no filter should be applied
     after = None
     before = None
 
     d, user_id_to_name, my_user_id = connect(host, username, login_token)
     team = select_team(d, my_user_id)
-    channel = select_channel(d, team, my_user_id, user_id_to_name)
-    export_channel(d, channel, user_id_to_name, output_base, before, after)
+    channels = select_channel(d, team, my_user_id, user_id_to_name)
+    for channel in channels:
+        export_channel(d, channel, user_id_to_name, output_base, before, after)
+    print("Finished export")
