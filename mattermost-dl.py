@@ -9,6 +9,16 @@ login_token = "" # Your Access Token. Can be extracted from Browser Inspector
 output_base = "results/"
 download_files = True
 
+
+# Specify range of posts to export as string in format "YYYY-MM-DD". Use None is no filter should be applied
+after = None
+before = None
+
+if after:
+    after = datetime.strptime(after, '%Y-%m-%d').timestamp()
+if before:
+    before = datetime.strptime(before, '%Y-%m-%d').timestamp()
+
 # Connect to server
 d = Driver({
     "url": host,
@@ -84,18 +94,39 @@ print("Found {} posts".format(len(all_posts)))
 
 # Create output directory
 output_base = pathlib.Path(output_base)
+output_base = output_base / channel["display_name"]
 if not output_base.exists():
     output_base.mkdir()
 
 # Simplify all posts to contain only username, date, message and files in chronological order
 simple_posts = []
 for i_post, post in enumerate(reversed(all_posts)):
+
+    # Filter posts by date range
+    created = post["create_at"]/1000
+    if (before and created > before) or (after and created < after):
+        continue
+
     user_id = post["user_id"]
     if user_id not in user_id_to_name:
         user_id_to_name[user_id] = d.users.get_user(user_id)["username"]
     username = user_id_to_name[user_id]
     created = datetime.utcfromtimestamp(post["create_at"]/1000).strftime('%Y-%m-%dT%H:%M:%SZ')
-    simple_post = dict(id=i_post, created=created, username=username,  message=post["message"])
+    message = post["message"]
+    simple_post = dict(id=i_post, created=created, username=username,  message=message)
+
+    # If a code block is given in the message, dump it to file
+    if message.count("```") > 1:
+        start_pos = message.find("```") + 3
+        end_pos = message.rfind("```")
+
+        cut = message[start_pos:end_pos]
+        if not len(cut):
+            print("Code cut has no length")
+        else:
+            filename = "%03d" % i_post+"_code.txt"
+            with open(output_base / filename, "w") as f:
+                f.write(cut)
 
     # If any files are attached to the message, download each
     if "files" in post["metadata"]:
@@ -105,20 +136,21 @@ for i_post, post in enumerate(reversed(all_posts)):
                 filename = "%03d" % i_post+"_"+file["name"]
                 print("Downloading", file["name"])
                 resp = d.files.get_file(file["id"])
-
                 # Mattermost Driver unfortunately parses json files to dicts
                 if isinstance(resp, dict):
-                    content = json.dumps(resp)
+                    with open(output_base / filename, "w") as f:
+                        json.dump(resp, f)
                 else:
-                    content = resp.content
+                    with open(output_base / filename, "wb") as f:
+                        f.write(resp.content)
 
-                with open(output_base / filename, "wb") as f:
-                    f.write(content)
             filenames.append(file["name"])
         simple_post["files"] = filenames
     simple_posts.append(simple_post)
 
 # Export posts to json file
 output_filename = channel["display_name"]+".json"
+output_filename = output_filename.replace("\\", "").replace("/", "")
 with open(output_base / output_filename, "w", encoding='utf8') as f:
     json.dump(simple_posts, f, indent=2, ensure_ascii=False)
+print("Dumped channel texts to", output_filename)
