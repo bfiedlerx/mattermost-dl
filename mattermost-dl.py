@@ -4,7 +4,7 @@ from datetime import datetime, date
 from typing import Tuple, Dict, List
 import getpass
 
-from mattermostdriver import Driver
+from mattermostdriver import Driver, exceptions
 import pathlib
 import json
 
@@ -171,13 +171,20 @@ def export_channel(d: Driver, channel: str, user_id_to_name: Dict[str, str], out
             simple_post["files"] = filenames
         simple_posts.append(simple_post)
 
+
+    # Fix to prevent script from failing if team name is not found
+    try:
+        tmp_team = d.teams.get_team(channel["team_id"])["name"]
+    except exceptions.ResourceNotFound:
+        tmp_team = 'NOT_FOUND'
+
     output = {
         "channel": {
             "name": channel["name"],
             "display_name": channel["display_name"],
             "header": channel["header"],
             "id": channel["id"],
-            "team": d.teams.get_team(channel["team_id"])["name"],
+            "team": tmp_team,
             "team_id": channel["team_id"],
             "exported_at": datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         },
