@@ -13,8 +13,9 @@ def connect(host: str, login_token: str = None, username: str = None, password: 
     d = Driver({
         "url": host,
         "port": 443,
+        "verify": False,
         "token": login_token,
-        "username": username,
+        "login_id": username,
         "password": password
     })
     d.login()
@@ -147,15 +148,15 @@ def export_channel(d: Driver, channel: str, user_id_to_name: Dict[str, str], out
                     f.write(cut.encode())
 
         # If any files are attached to the message, download each
-        if "files" in post["metadata"]:
+        if "file_ids" in post:
             filenames = []
-            for file in post["metadata"]["files"]:
+            for file in post["file_ids"]:
                 if download_files:
-                    filename = "%03d" % i_post + "_" + file["name"]
-                    print("Downloading", file["name"])
+                    filename = "%03d" % i_post + "_" + file + "." + d.files.get_file_metadata(file)["extension"]
+                    print("Downloading", file)
                     while True:
                         try:
-                            resp = d.files.get_file(file["id"])
+                            resp = d.files.get_file(file)
                             break
                         except:
                             print("Downloading file failed")
@@ -167,7 +168,7 @@ def export_channel(d: Driver, channel: str, user_id_to_name: Dict[str, str], out
                         with open(output_base / filename, "wb") as f:
                             f.write(resp.content)
 
-                filenames.append(file["name"])
+                filenames.append(file)
             simple_post["files"] = filenames
         simple_posts.append(simple_post)
 
