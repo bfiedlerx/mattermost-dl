@@ -280,8 +280,17 @@ def complete_config(config: dict, config_filename: str = "config.json") -> dict:
 
 
 def find_mmauthtoken_firefox(host):
-    appdata_dir = pathlib.Path(os.environ["APPDATA"])
-    profiles_dir = appdata_dir / "Mozilla/Firefox/Profiles"
+    # Windows
+    if os.name == 'nt':
+        appdata_dir = pathlib.Path(os.environ["APPDATA"])
+        profiles_dir = appdata_dir / "Mozilla/Firefox/Profiles"
+    # Linux
+    elif os.name == 'posix':
+        home_dir = pathlib.Path(os.environ["HOME"])
+        profiles_dir = home_dir / ".mozilla/firefox"
+    else:
+        raise Exception('Unknown operating system')
+
     cookie_files = profiles_dir.rglob("cookies.sqlite")
 
     all_tokens = []
